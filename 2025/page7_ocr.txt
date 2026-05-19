@@ -1,0 +1,24 @@
+24) The balanced thermochemical reaction for the complete combustion of
+oxalic acid with the lowest whole number coefficients is
+2 H2C204 (s) + O2 (g) > 4CO2 (g) + 2H2O (g) AH? = -492.1 kJ
+Given the following thermodynamic data, determine the AG® for the
+complete combustion of | mol of oxalic acid.
+
+| Substance | A H° (kJ. mol") _| S° (J mol"! K
+Ci)
+
+A) ~—782.8kJ mol! B)-—363.3 kJ mol! C) 393.3 kJ mol!
+D) —900.0 kJ mol! E) 1565.5 kJ mol!
+
+25
+
+~~
+
+During a titration analysis, the concentration of a known titrant is often
+determined using a primary standard. For the titration of an unknown weak
+acid with NaOH, the primary standard, potassium hydrogen phthalate was
+used. The standardized concentration of the NaOH solution was determined
+to be 0.101 mol L*!. A volume of 10.0 mL of an unknown monoprotic weak
+acid was titrated with the standardized NaOH and the following data was
+collected What is the best estimate of the K, of the unknown monoprotic
+weak acid?
