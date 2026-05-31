@@ -57,6 +57,14 @@ function saveProgress(progress) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
 }
 
+function authErrorMessage(error) {
+  const message = error?.message ?? String(error);
+  if (/failed to fetch|networkerror|load failed|fetch/i.test(message)) {
+    return '无法连接 Supabase 认证服务。请检查 VITE_SUPABASE_URL 是否仍然有效，以及 Netlify 环境变量是否已重新部署。';
+  }
+  return message;
+}
+
 function useHashlessRoute() {
   const currentRoute = () => `${window.location.pathname}${window.location.search}`;
   const [path, setPath] = useState(currentRoute);
@@ -122,11 +130,18 @@ function App() {
     if (!supabaseConfigured) return;
 
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setUser(data.session?.user ?? null);
-      setAuthState(data.session?.user ? 'signed-in' : 'signed-out');
-    });
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        setUser(data.session?.user ?? null);
+        setAuthState(data.session?.user ? 'signed-in' : 'signed-out');
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!active) return;
+        setAuthState('signed-out');
+        setAuthMessage(authErrorMessage(error));
+      });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -169,12 +184,12 @@ function App() {
 
   useEffect(() => {
     const pathname = new URL(path, window.location.origin).pathname;
-    if (pathname !== '/practice/random' || !questions.length) return;
+    if (!user || pathname !== '/practice/random' || !questions.length) return;
     const question = pickRandom(questions);
     if (question) {
       replace(`/practice/${question.year}/${question.question}`);
     }
-  }, [path, questions]);
+  }, [path, questions, user]);
 
   const stats = useMemo(() => buildStats(questions, progress), [questions, progress]);
   const current = useMemo(() => resolveRoute(path, questions, progress), [path, questions, progress]);
@@ -211,7 +226,7 @@ function App() {
   };
 
   const clearProgress = async () => {
-    if (window.confirm('确定要清空本地学习记录吗？这个操作不能撤销。')) {
+    if (window.confirm('确定要清空学习记录吗？这个操作不能撤销。')) {
       setProgress({});
       if (supabaseConfigured && user) {
         try {
@@ -235,14 +250,22 @@ function App() {
 
     setAuthMessage('');
     setAuthState('checking');
-    const authCall = mode === 'signup'
-      ? supabase.auth.signUp({ email, password })
-      : supabase.auth.signInWithPassword({ email, password });
-    const { data, error } = await authCall;
+    let data;
+    let error;
+    try {
+      const authCall = mode === 'signup'
+        ? supabase.auth.signUp({ email, password })
+        : supabase.auth.signInWithPassword({ email, password });
+      ({ data, error } = await authCall);
+    } catch (caughtError) {
+      setAuthState(user ? 'signed-in' : 'signed-out');
+      setAuthMessage(authErrorMessage(caughtError));
+      return;
+    }
 
     if (error) {
       setAuthState(user ? 'signed-in' : 'signed-out');
-      setAuthMessage(error.message);
+      setAuthMessage(authErrorMessage(error));
       return;
     }
 
@@ -259,12 +282,32 @@ function App() {
     setSyncState('local');
   };
 
+  const locked = !user;
+
   if (loadState === 'loading') {
-    return <Shell navigate={navigate} stats={stats} user={user} authState={authState} syncState={syncState} authMessage={authMessage} onAuthSubmit={handleAuthSubmit} onSignOut={handleSignOut}><div className="empty-state">正在加载题库...</div></Shell>;
+    return <Shell navigate={navigate} stats={stats} user={user} authState={authState} syncState={syncState} authMessage={authMessage} onAuthSubmit={handleAuthSubmit} onSignOut={handleSignOut} locked={locked}><div className="empty-state">正在加载题库...</div></Shell>;
   }
 
   if (loadState === 'empty') {
-    return <Shell navigate={navigate} stats={stats} user={user} authState={authState} syncState={syncState} authMessage={authMessage} onAuthSubmit={handleAuthSubmit} onSignOut={handleSignOut}><div className="empty-state">题库数据没有加载成功。</div></Shell>;
+    return <Shell navigate={navigate} stats={stats} user={user} authState={authState} syncState={syncState} authMessage={authMessage} onAuthSubmit={handleAuthSubmit} onSignOut={handleSignOut} locked={locked}><div className="empty-state">题库数据没有加载成功。</div></Shell>;
+  }
+
+  if (locked) {
+    return (
+      <Shell
+        navigate={navigate}
+        stats={stats}
+        user={user}
+        authState={authState}
+        syncState={syncState}
+        authMessage={authMessage}
+        onAuthSubmit={handleAuthSubmit}
+        onSignOut={handleSignOut}
+        locked={locked}
+      >
+        <AuthRequired authState={authState} message={authMessage} onSubmit={handleAuthSubmit} />
+      </Shell>
+    );
   }
 
   return (
@@ -277,6 +320,7 @@ function App() {
       authMessage={authMessage}
       onAuthSubmit={handleAuthSubmit}
       onSignOut={handleSignOut}
+      locked={locked}
     >
       {current.name === 'dashboard' && (
         <Dashboard questions={questions} progress={progress} stats={stats} navigate={navigate} clearProgress={clearProgress} user={user} syncState={syncState} />
@@ -338,7 +382,7 @@ function buildStats(questions, progress) {
   };
 }
 
-function Shell({ children, navigate, stats, user, authState, syncState, authMessage, onAuthSubmit, onSignOut }) {
+function Shell({ children, navigate, stats, user, authState, syncState, authMessage, onAuthSubmit, onSignOut, locked }) {
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -351,9 +395,9 @@ function Shell({ children, navigate, stats, user, authState, syncState, authMess
         </button>
         <nav className="main-nav" aria-label="主导航">
           <button onClick={() => navigate('/')}>首页</button>
-          <button onClick={() => navigate('/questions')}>题库</button>
-          <button onClick={() => navigate('/review/wrong')}>错题</button>
-          <button onClick={() => navigate('/review/favorites')}>收藏</button>
+          <button onClick={() => navigate('/questions')} disabled={locked}>题库</button>
+          <button onClick={() => navigate('/review/wrong')} disabled={locked}>错题</button>
+          <button onClick={() => navigate('/review/favorites')} disabled={locked}>收藏</button>
         </nav>
         <AuthPanel
           user={user}
@@ -364,34 +408,48 @@ function Shell({ children, navigate, stats, user, authState, syncState, authMess
           onSignOut={onSignOut}
         />
       </header>
-      <section className="stats-strip" aria-label="学习概览">
-        <Metric label="总题量" value={stats.total} />
-        <Metric label="已完成" value={stats.answered} />
-        <Metric label="正确率" value={`${stats.accuracy}%`} />
-        <Metric label="错题" value={stats.wrong} />
-        <Metric label="收藏" value={stats.favorites} />
-      </section>
+      {!locked && (
+        <section className="stats-strip" aria-label="学习概览">
+          <Metric label="总题量" value={stats.total} />
+          <Metric label="已完成" value={stats.answered} />
+          <Metric label="正确率" value={`${stats.accuracy}%`} />
+          <Metric label="错题" value={stats.wrong} />
+          <Metric label="收藏" value={stats.favorites} />
+        </section>
+      )}
       <main>{children}</main>
     </div>
   );
 }
 
+function AuthRequired({ authState, message, onSubmit }) {
+  const checking = authState === 'checking';
+
+  return (
+    <section className="auth-required">
+      <div>
+        <h1>登录后开始刷题</h1>
+        <p>题库、答案、视频讲解和学习记录都需要账号登录后使用。</p>
+      </div>
+      {checking ? (
+        <div className="empty-state">正在检查登录状态...</div>
+      ) : supabaseConfigured ? (
+        <AuthForm message={message} onSubmit={onSubmit} submitClassName="primary" />
+      ) : (
+        <div className="empty-state">还没有配置 Supabase，暂时无法登录。</div>
+      )}
+    </section>
+  );
+}
+
 function AuthPanel({ user, authState, syncState, message, onSubmit, onSignOut }) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState('signin');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const submit = (event) => {
-    event.preventDefault();
-    onSubmit(mode, email.trim(), password);
-  };
 
   if (!supabaseConfigured) {
     return (
       <div className="auth-box compact-auth">
-        <strong>本地模式</strong>
-        <small>配置 Supabase 后开启登录</small>
+        <strong>未配置登录</strong>
+        <small>需要 Supabase</small>
       </div>
     );
   }
@@ -414,24 +472,39 @@ function AuthPanel({ user, authState, syncState, message, onSubmit, onSignOut })
         {authState === 'checking' ? '检查登录...' : '登录 / 注册'}
       </button>
       {open && (
-        <form className="auth-popover" onSubmit={submit}>
-          <div className="language-tabs auth-tabs">
-            <button type="button" className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>登录</button>
-            <button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>注册</button>
-          </div>
-          <label>
-            邮箱
-            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
-          </label>
-          <label>
-            密码
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength="6" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} />
-          </label>
-          <button type="submit" className="primary">{mode === 'signin' ? '登录' : '注册'}</button>
-          {message && <p className="auth-message">{message}</p>}
-        </form>
+        <AuthForm className="auth-popover" message={message} onSubmit={onSubmit} submitClassName="primary" />
       )}
     </div>
+  );
+}
+
+function AuthForm({ className = 'auth-form', message, onSubmit, submitClassName = '' }) {
+  const [mode, setMode] = useState('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const submit = (event) => {
+    event.preventDefault();
+    onSubmit(mode, email.trim(), password);
+  };
+
+  return (
+    <form className={className} onSubmit={submit}>
+      <div className="language-tabs auth-tabs">
+        <button type="button" className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>登录</button>
+        <button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>注册</button>
+      </div>
+      <label>
+        邮箱
+        <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
+      </label>
+      <label>
+        密码
+        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength="6" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} />
+      </label>
+      <button type="submit" className={submitClassName}>{mode === 'signin' ? '登录' : '注册'}</button>
+      {message && <p className="auth-message">{message}</p>}
+    </form>
   );
 }
 
@@ -458,7 +531,7 @@ function Dashboard({ questions, progress, stats, navigate, clearProgress, user, 
           <h1>CCC Chemistry 刷题台</h1>
           <p>
             按年份练习、随机抽题、复盘错题，答案和中英讲解都已经接入。
-            {user ? ` 当前账号：${user.email}，${syncState === 'synced' ? '云端记录已同步。' : '记录会自动同步到云端。'}` : ' 未登录时会先保存到本机。'}
+            当前账号：{user.email}，{syncState === 'synced' ? '云端记录已同步。' : '记录会自动同步到云端。'}
           </p>
         </div>
         <div className="command-actions">
@@ -487,7 +560,7 @@ function Dashboard({ questions, progress, stats, navigate, clearProgress, user, 
         <ReviewShortcut title="错题练习" value={stats.wrong} onClick={() => navigate('/review/wrong')} />
         <ReviewShortcut title="收藏练习" value={stats.favorites} onClick={() => navigate('/review/favorites')} />
         <ReviewShortcut title="易错题" value={stats.tricky} onClick={() => navigate('/questions?tricky=1')} />
-        <button className="danger-text" onClick={clearProgress}>清空本地记录</button>
+        <button className="danger-text" onClick={clearProgress}>清空学习记录</button>
       </section>
     </div>
   );

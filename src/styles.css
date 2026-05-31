@@ -172,6 +172,13 @@ button:disabled {
   padding: 14px;
 }
 
+.auth-form,
+.auth-popover {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-form label,
 .auth-popover label {
   display: grid;
   gap: 5px;
@@ -179,6 +186,7 @@ button:disabled {
   font-size: 0.88rem;
 }
 
+.auth-form input,
 .auth-popover input {
   min-height: 40px;
   border: 1px solid #c9d0c7;
@@ -226,6 +234,32 @@ button:disabled {
 
 main {
   padding: 24px clamp(16px, 4vw, 48px) 56px;
+}
+
+.auth-required {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 28px;
+  align-items: start;
+  max-width: 920px;
+  margin: 48px auto 0;
+  padding: clamp(24px, 5vw, 42px);
+  border: 1px solid #dfe4dc;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.auth-required h1 {
+  margin: 0 0 10px;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  line-height: 1;
+}
+
+.auth-required p {
+  margin: 0;
+  max-width: 520px;
+  color: #58635b;
+  font-size: 1rem;
 }
 
 .dashboard,
@@ -583,6 +617,11 @@ p {
 
   .stats-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auth-required {
+    grid-template-columns: 1fr;
+    margin-top: 18px;
   }
 
   .filters,

@@ -41,11 +41,19 @@ Site configuration -> Environment variables
 
 然后重新部署。
 
+如果线上可以打开页面但无法注册/登录，先检查线上部署使用的 `VITE_SUPABASE_URL` 是否还能解析。例如：
+
+```bash
+curl -I https://your-project-ref.supabase.co/auth/v1/health
+```
+
+如果返回 `Could not resolve host` 或公共 DNS 显示 NXDOMAIN，说明这个 Supabase project ref 已经不存在、暂停后不可用，或 Netlify 环境变量仍是旧项目地址。更新 Netlify 环境变量后必须重新部署。
+
 ## 5. 工作方式
 
-- 未登录：刷题记录保存到浏览器 `localStorage`
-- 登录后：本地记录会和 Supabase 云端记录合并，并同步到数据库
+- 未登录：只能看到登录/注册入口，不能进入题库或题目页
+- 登录后：刷题记录会和 Supabase 云端记录合并，并同步到数据库
 - 已登录：作答、收藏、错题、查看答案会自动保存到云端
-- 退出登录：当前浏览器仍保留本地记录
+- 退出登录：回到登录页，不能继续查看题目内容
 
 题图和讲解视频仍放在 Netlify/外部视频项目，不进入 Supabase，避免产生大流量费用。
